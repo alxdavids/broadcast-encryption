@@ -64,6 +64,7 @@ func Setup(n int) (CompletePublicKey, []AdvertiserSecretKey, error) {
 	privateKeys := make([]AdvertiserSecretKey, n)
 	for i := 0; i < n; i++ {
 		privateKeys[i] = AdvertiserSecretKey { 
+			i: i,
 			Di: *new(bn256.G1).ScalarMult(&PArr[i], gamma),
 		}
 	}
@@ -108,13 +109,14 @@ func (bpk *BroadcastPublicKey) Encrypt(S []int) (Header, bn256.GT, error) {
 	ele := bn256.Pair(&bpk.PArr[bpk.n-1], &bpk.Q1)
 	K := ele.ScalarMult(ele, k)
 
-	B := &bpk.V
+	C1 := &bpk.V
 	for _, j := range S {
-		B = B.Add(B, &bpk.PArr[bpk.n - j])
+		C1 = C1.Add(C1, &bpk.PArr[bpk.n - j])
 	}
+	C1 = C1.ScalarMult(C1, k)
 	hdr := Header { 
 		C0: new(bn256.G2).ScalarMult(&bpk.Q, k),
-		C1: B,
+		C1: C1,
 	}
 
 	return hdr, *K, nil
