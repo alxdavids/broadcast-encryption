@@ -150,13 +150,15 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	S := []int{2, 4, 5}
+	S := []int{0, 2, 3}
 	bpk := cpk.broadcastPublicKey()
 	hdr, K, err := bpk.Encrypt(S)
 	if err != nil {
 		log.Fatalln(err)
 	}
 
-	chkK := secretKeys[1].Decrypt(S, hdr, cpk.getPublicKey(1))
-	fmt.Printf("K: %v\nchkK: %v", K.String(), chkK.String())
+	chkK := secretKeys[0].Decrypt(S, hdr, cpk.getPublicKey(0)).Marshal()
+	if string(K.Marshal()) != string(chkK) {
+		fmt.Printf("Equality check failed\nK: %v\nchkK: %v", K.Marshal(), chkK)
+	}
 }
