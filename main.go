@@ -111,7 +111,7 @@ func (bpk *BroadcastPublicKey) Encrypt(S []int) (Header, bn256.GT, error) {
 
 	C1 := &bpk.V
 	for _, j := range S {
-		C1 = C1.Add(C1, &bpk.PArr[bpk.n - j])
+		C1 = C1.Add(C1, &bpk.PArr[bpk.n - (j+1)])
 	}
 	C1 = C1.ScalarMult(C1, k)
 	hdr := Header { 
@@ -138,7 +138,7 @@ func (adsk *AdvertiserSecretKey) Decrypt(S []int, hdr Header, adpk AdvertiserPub
 	val := &adsk.Di
 	for _, j := range S {
 		if j != adsk.i {
-			val = val.Add(val, &adpk.PArr[adpk.n - j + adsk.i])
+			val = val.Add(val, &adpk.PArr[adpk.n - (j+1) + (adsk.i+1)])
 		}
 	}
 	denominator := new(bn256.GT).Neg(bn256.Pair(val, hdr.C0))
@@ -146,7 +146,7 @@ func (adsk *AdvertiserSecretKey) Decrypt(S []int, hdr Header, adpk AdvertiserPub
 }
 
 func main() {
-	n := 16
+	n := 8
 	cpk, secretKeys, err := Setup(n)
 	if err != nil {
 		log.Fatalln(err)
@@ -159,6 +159,6 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	chkK := secretKeys[0].Decrypt(S, hdr, cpk.ithPublicKey(1))
+	chkK := secretKeys[1].Decrypt(S, hdr, cpk.ithPublicKey(1))
 	fmt.Printf("K: %v\nchkK: %v", K.String(), chkK.String())
 }
