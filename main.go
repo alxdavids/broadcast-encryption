@@ -19,8 +19,6 @@ type CompletePublicKey struct {
 
 func Setup(n int) (CompletePublicKey, []AdvertiserSecretKey, error) {
 	r := rand.Reader
-	// P := new(bn256.G1)
-	// Q := new(bn256.G2)
 	_, P, err := bn256.RandomG1(r)
 	if err != nil {
 		return CompletePublicKey{}, nil, err
@@ -79,7 +77,7 @@ func Setup(n int) (CompletePublicKey, []AdvertiserSecretKey, error) {
 	}, privateKeys, nil
 }
 
-func (cpk *CompletePublicKey) ithPublicKey(i int) AdvertiserPublicKey {
+func (cpk *CompletePublicKey) getPublicKey(i int) AdvertiserPublicKey {
 	return AdvertiserPublicKey { n: cpk.n, Qi: cpk.QArr[i], PArr: cpk.PArr }
 }
 
@@ -152,13 +150,13 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	S := []int{1, 4, 5}
+	S := []int{2, 4, 5}
 	bpk := cpk.broadcastPublicKey()
 	hdr, K, err := bpk.Encrypt(S)
 	if err != nil {
 		log.Fatalln(err)
 	}
 
-	chkK := secretKeys[1].Decrypt(S, hdr, cpk.ithPublicKey(1))
+	chkK := secretKeys[1].Decrypt(S, hdr, cpk.getPublicKey(1))
 	fmt.Printf("K: %v\nchkK: %v", K.String(), chkK.String())
 }
