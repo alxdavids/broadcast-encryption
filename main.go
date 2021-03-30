@@ -4,7 +4,6 @@ import (
 	"crypto/rand"
 	"fmt"
 	"log"
-	"math/big"
 
 	"github.com/cloudflare/bn256"
 )
@@ -18,20 +17,20 @@ type CompletePublicKey struct {
 	V bn256.G1
 }
 
-func Setup(n int) (CompletePublicKey, []AdvertiserSecretKey, *big.Int, error) {
+func Setup(n int) (CompletePublicKey, []AdvertiserSecretKey, error) {
 	r := rand.Reader
 	_, P, err := bn256.RandomG1(r)
 	if err != nil {
-		return CompletePublicKey{}, nil, nil, err
+		return CompletePublicKey{}, nil, err
 	}
 	_, Q, err := bn256.RandomG2(r)
 	if err != nil {
-		return CompletePublicKey{}, nil, nil, err
+		return CompletePublicKey{}, nil, err
 	}
 
 	alpha, err := rand.Int(r, bn256.Order)
 	if err != nil {
-		return CompletePublicKey{}, nil, nil, err
+		return CompletePublicKey{}, nil, err
 	}
 
 	// build 2n-1 P_i values
@@ -55,7 +54,7 @@ func Setup(n int) (CompletePublicKey, []AdvertiserSecretKey, *big.Int, error) {
 	// construct V
 	gamma, err := rand.Int(r, bn256.Order)
 	if err != nil {
-		return CompletePublicKey{}, nil, nil, err
+		return CompletePublicKey{}, nil, err
 	}
 	V := new(bn256.G1).ScalarMult(P, gamma)
 
@@ -75,7 +74,7 @@ func Setup(n int) (CompletePublicKey, []AdvertiserSecretKey, *big.Int, error) {
 		PArr: PArr,
 		QArr: QArr,
 		V: *V,
-	}, privateKeys, alpha, nil
+	}, privateKeys, nil
 }
 
 func (cpk *CompletePublicKey) getPublicKey(i int) AdvertiserPublicKey {
@@ -100,10 +99,10 @@ type Header struct {
 	C1 *bn256.G1
 }
 
-func (bpk *BroadcastPublicKey) Encrypt(S []int) (Header, bn256.GT, *big.Int, error) {
+func (bpk *BroadcastPublicKey) Encrypt(S []int) (Header, bn256.GT, error) {
 	k, err := rand.Int(rand.Reader, bn256.Order)
 	if err != nil {
-		return Header{}, bn256.GT{}, nil, err
+		return Header{}, bn256.GT{}, err
 	}
 	ele := bn256.Pair(&bpk.PArr[bpk.n-1], &bpk.Q1)
 	K := ele.ScalarMult(ele, k)
@@ -118,7 +117,7 @@ func (bpk *BroadcastPublicKey) Encrypt(S []int) (Header, bn256.GT, *big.Int, err
 		C1: C1,
 	}
 
-	return hdr, *K, k, nil
+	return hdr, *K, nil
 }
 
 type AdvertiserPublicKey struct {
@@ -147,22 +146,17 @@ func (adsk *AdvertiserSecretKey) Decrypt(S []int, hdr Header, adpk AdvertiserPub
 
 func main() {
 	n := 2
-	cpk, secretKeys, alpha, err := Setup(n)
+	cpk, secretKeys, err := Setup(n)
 	if err != nil {
 		log.Fatalln(err)
 	}
 
 	S := []int{0}
 	bpk := cpk.broadcastPublicKey()
-	hdr, K, k, err := bpk.Encrypt(S)
+	hdr, K, err := bpk.Encrypt(S)
 	if err != nil {
 		log.Fatalln(err)
 	}
-
-	alphasq := new(big.Int).Mul(alpha, alpha)
-	exp := new(big.Int).Mul(new(big.Int).Mul(alphasq, alpha), k)
-	pq := bn256.Pair(&bpk.P, &bpk.Q)
-	chk := new(bn256.GT).ScalarMult(pq, exp)
 
 	chkK := secretKeys[0].Decrypt(S, hdr, cpk.getPublicKey(0)).Marshal()
 	if string(K.Marshal()) != string(chkK) {
