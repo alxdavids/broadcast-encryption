@@ -145,7 +145,7 @@ func (adsk *AdvertiserSecretKey) Decrypt(S []int, hdr Header, adpk AdvertiserPub
 }
 
 func main() {
-	n := 2
+	n := 1
 	cpk, secretKeys, err := Setup(n)
 	if err != nil {
 		log.Fatalln(err)
@@ -160,6 +160,6 @@ func main() {
 
 	chkK := secretKeys[0].Decrypt(S, hdr, cpk.getPublicKey(0)).Marshal()
 	if string(K.Marshal()) != string(chkK) {
-		fmt.Printf("Equality check failed\nK: %v\nchkK: %v\nchk: %v", K.Marshal(), chkK, chk.Marshal())
+		fmt.Printf("Equality check failed\nK: %v\nchkK: %v", K.Marshal(), chkK)
 	}
 }
