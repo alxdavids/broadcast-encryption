@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"fmt"
 	"log"
+	"math/big"
 
 	"github.com/cloudflare/bn256"
 )
@@ -17,20 +18,20 @@ type CompletePublicKey struct {
 	V bn256.G1
 }
 
-func Setup(n int) (CompletePublicKey, []AdvertiserSecretKey, error) {
+func Setup(n int) (CompletePublicKey, []AdvertiserSecretKey, *big.Int, error) {
 	r := rand.Reader
 	_, P, err := bn256.RandomG1(r)
 	if err != nil {
-		return CompletePublicKey{}, nil, err
+		return CompletePublicKey{}, nil, nil, err
 	}
 	_, Q, err := bn256.RandomG2(r)
 	if err != nil {
-		return CompletePublicKey{}, nil, err
+		return CompletePublicKey{}, nil, nil, err
 	}
 
 	alpha, err := rand.Int(r, bn256.Order)
 	if err != nil {
-		return CompletePublicKey{}, nil, err
+		return CompletePublicKey{}, nil, nil, err
 	}
 
 	// build 2n-1 P_i values
@@ -39,7 +40,7 @@ func Setup(n int) (CompletePublicKey, []AdvertiserSecretKey, error) {
 	for i := 0; i < 2*n; i++ {
 		accumulatorP = accumulatorP.ScalarMult(accumulatorP, alpha)
 		if i != n {
-			PArr = append(PArr, *accumulatorP)
+			PArr = append(PArr, *new(bn256.G1).Set(accumulatorP))
 		}
 	}
 	
@@ -48,13 +49,13 @@ func Setup(n int) (CompletePublicKey, []AdvertiserSecretKey, error) {
 	QArr := make([]bn256.G2, n)
 	for i := 0; i < n; i++ {
 		accumulatorQ = accumulatorQ.ScalarMult(accumulatorQ, alpha)
-		QArr[i] = *accumulatorQ
+		QArr[i] = *new(bn256.G2).Set(accumulatorQ)
 	}
 
 	// construct V
 	gamma, err := rand.Int(r, bn256.Order)
 	if err != nil {
-		return CompletePublicKey{}, nil, err
+		return CompletePublicKey{}, nil, nil, err
 	}
 	V := new(bn256.G1).ScalarMult(P, gamma)
 
@@ -74,7 +75,7 @@ func Setup(n int) (CompletePublicKey, []AdvertiserSecretKey, error) {
 		PArr: PArr,
 		QArr: QArr,
 		V: *V,
-	}, privateKeys, nil
+	}, privateKeys, alpha, nil
 }
 
 func (cpk *CompletePublicKey) getPublicKey(i int) AdvertiserPublicKey {
@@ -99,10 +100,10 @@ type Header struct {
 	C1 *bn256.G1
 }
 
-func (bpk *BroadcastPublicKey) Encrypt(S []int) (Header, bn256.GT, error) {
+func (bpk *BroadcastPublicKey) Encrypt(S []int) (Header, bn256.GT, *big.Int, error) {
 	k, err := rand.Int(rand.Reader, bn256.Order)
 	if err != nil {
-		return Header{}, bn256.GT{}, err
+		return Header{}, bn256.GT{}, nil, err
 	}
 	ele := bn256.Pair(&bpk.PArr[bpk.n-1], &bpk.Q1)
 	K := ele.ScalarMult(ele, k)
@@ -117,7 +118,7 @@ func (bpk *BroadcastPublicKey) Encrypt(S []int) (Header, bn256.GT, error) {
 		C1: C1,
 	}
 
-	return hdr, *K, nil
+	return hdr, *K, k, nil
 }
 
 type AdvertiserPublicKey struct {
@@ -140,25 +141,31 @@ func (adsk *AdvertiserSecretKey) Decrypt(S []int, hdr Header, adpk AdvertiserPub
 		}
 	}
 	denominator := new(bn256.GT).Neg(bn256.Pair(val, hdr.C0))
-	return new(bn256.GT).Add(numerator, denominator)
+	out := new(bn256.GT).Add(numerator, denominator)
+	return out
 }
 
 func main() {
-	n := 1
-	cpk, secretKeys, err := Setup(n)
+	n := 2
+	cpk, secretKeys, alpha, err := Setup(n)
 	if err != nil {
 		log.Fatalln(err)
 	}
 
 	S := []int{0}
 	bpk := cpk.broadcastPublicKey()
-	hdr, K, err := bpk.Encrypt(S)
+	hdr, K, k, err := bpk.Encrypt(S)
 	if err != nil {
 		log.Fatalln(err)
 	}
 
+	alphasq := new(big.Int).Mul(alpha, alpha)
+	exp := new(big.Int).Mul(new(big.Int).Mul(alphasq, alpha), k)
+	pq := bn256.Pair(&bpk.P, &bpk.Q)
+	chk := new(bn256.GT).ScalarMult(pq, exp)
+
 	chkK := secretKeys[0].Decrypt(S, hdr, cpk.getPublicKey(0)).Marshal()
 	if string(K.Marshal()) != string(chkK) {
-		fmt.Printf("Equality check failed\nK: %v\nchkK: %v", K.Marshal(), chkK)
+		fmt.Printf("Equality check failed\nK: %v\nchkK: %v\nchk: %v", K.Marshal(), chkK, chk.Marshal())
 	}
 }
